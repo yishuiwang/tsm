@@ -1,0 +1,38 @@
+#最大玩家数-数字须在1到255之间
+maxplayers=10
+
+#载入世界-并自动启动服务器,需要写绝对地址。注意：服务器启动时会按此参数寻找文件，如果找不到则会按参数 worldname 自动创建世界
+world=/game/terraria-server/world/world_expert.wld
+
+#端口号-
+port=7777
+
+#服务器密码-
+password=2233
+
+#Message of the day-设置游戏中迎接新一天的消息
+motd=泡杯护肝茶吧
+
+#存档地址-设置存储世界文件的文件夹
+worldpath=/game/terraria-server/world/
+
+#如果找不到，则创建一个新世界。 世界大小由下式指定：1（小型）、2（中型）和3（大型）。
+autocreate=3
+
+#世界名称-找不到世界时，自动创建的世界名称。不需要写.wld后缀
+worldname=world_expert
+
+#黑名单-banlist的位置。默认在工作目录中的“banlist.txt”。
+banlist=banlist.txt
+
+#反作弊-添加额外的作弊保护，就是是否允许作弊
+secure=1
+
+#默认系统优先级0：真实时间、1：高、2：高于普通、3：普通、4：低于普通、5：闲暇
+#priority=0
+
+#语言-
+language=zh
+
+#难度-1.4版本难度分为0(普通), 1(专家), 2(大师), 3(旅途)
+difficulty=1
