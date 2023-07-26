@@ -28,107 +28,143 @@ function display_menu() {
             ;;
     esac
     echo 
-    echo "0. 下载服务器"
-    echo "1. 启动服务器"
-    echo "2. 停止服务器"
-    echo "3. 重启服务器"
-    echo "4. 查看配置信息"
-    echo "5. 更新"
-    echo "6. 卸载"
+    echo "1. 下载服务器"
+    echo "2. 启动服务器"
+    echo "3. 停止服务器"
+    echo "4. 重启服务器"
+    echo "5. 查看配置信息"
+    echo "6. 更新"
+    echo "7. 卸载"
 }
+
+
+function show_config() {
+    file="config.txt"
+
+    if [ ! -f "$file" ]; then
+        echo "Config file not found!"
+        return 1
+    fi
+
+    info=(
+        "最大玩家数 (maxplayers)    "
+        "载入世界 (world)           "
+        "端口号 (port)              "
+        "服务器密码 (password)      "
+        "Message of the day (motd)  "
+        "反作弊 (secure)            "
+        "语言 (language)            "
+    )
+
+    echo "-------------- Config --------------"
+
+    while IFS= read -r line
+    do
+        if [[ $line == \#*-* ]]; then
+            comment="$(echo "${line#'#'}" | cut -d'-' -f1 | xargs)"
+        elif [[ $line != \#* ]] && [[ $line != "" ]]; then
+            name="${line%%=*}"
+            value="${line#*=}"
+            for i in "${info[@]}"; do
+                if [[ "$i" == *"$name"* ]]; then
+                    printf "%s = %s\n" "$i" "$value"
+                fi
+            done
+        fi
+    done < "$file"
+}
+
+
 
 function download_server() {
+
+    echo "正在获取版本..."
     url="https://terraria.wiki.gg/wiki/Server#Downloads"
 
-    # 发送GET请求获取HTML页面，并使用grep提取所有带有href属性的链接
     html_content=$(curl -s "$url")
-    href_links=$(echo "$html_content" | grep -o '<a[^>]*href="[^"]*"[^>]*>')
+    terraria_server_links=$(echo "$html_content" | grep -o '<a[^>]*href="[^"]*"[^>]*>' | grep -o 'href="[^"]*"')
 
-    # 保存版本号到数组中
-    versions=()
-    while IFS= read -r line; do
-        url=$(echo "$line" | grep -o 'href="[^"]*"' | cut -d'"' -f2)
-        if [[ $url == https://terraria.org/api/download/pc-dedicated-server/* ]]; then
-            version=$(echo "$url" | awk -F'/' '{print $NF}' | cut -d'-' -f3)
-            versions+=("$version")
-        fi
-    done <<< "$href_links"
+    # 用于存储所有符合条件的链接
+    matched_links=()
 
-    # 显示前10条最新版本
-    echo "可用的服务器版本列表："
-    for ((i=0; i<${#versions[@]}; i++)); do
-        if [ $i -ge 10 ]; then
-            break
+    download_links=()
+
+    # 使用循环遍历所有链接，并提取包含terraria-server-的链接
+    for link in $terraria_server_links; do
+        if echo "$link" | grep -q 'terraria-server-'; then
+            server_version=$(echo "$link" | grep -o 'terraria-server-[^"]*')
+            matched_links+=("$server_version")
+            download_link=$(echo "$link" | sed -e 's/href="//' -e 's/"$//')
+            download_links+=("$download_link")
         fi
-        echo "$((i+1)). 版本 ${versions[$i]}"
     done
 
-    echo "请选择要下载的服务器版本 (输入相应数字):"
-    read version_choice
+     
+    total=${#matched_links[@]}
+    last_10="${matched_links[@]:$((total-10)):10}"
 
-    case $version_choice in
-        1)
-            server_version="1.0" # 设置服务器版本为 1.0
-            ;;
-        2)
-            server_version="1.1" # 设置服务器版本为 1.1
-            ;;
-        3)
-            server_version="1.2" # 设置服务器版本为 1.2
-            ;;
-        # 在这里添加更多版本的处理...
+    # 输出最后十个版本供选择
+    PS3="请选择一个版本:"
+    select version_choice in ${last_10[@]}; do
+        if [ -n "$version_choice" ]; then
+            echo "您选择的版本是: $version_choice"
+            index=0
+            for version in "${matched_links[@]}"; do
+                if [ "$version" == "$version_choice" ]; then
+                    download_url="${download_links[$index]}"
+                    echo "下载链接：$download_url"
+                    wget -c "$download_url" -O "${version_choice}"
+                    echo "下载完成"
+                    break
+                fi
+                ((index++))
+            done
+            break
+        else
+            echo "无效的选项，请重新输入!"
+        fi
+    done
 
-        0)
-            echo "返回主菜单。"
-            return
-            ;;
-        *)
-            echo "无效的选项，请重新输入！"
-            download_server # 重新调用下载服务器函数以重新选择版本
-            return
-            ;;
-    esac
+    echo "正在解压"
+    unzip "$version_choice" -d TerrariaServer
+    echo "解压完成"
 
-    # 在这里添加根据选择的版本进行下载的逻辑
-    # 假设服务器文件下载链接按照版本命名，比如 "https://example.com/terraria-server-$server_version.tar.gz"
-    # 使用 "wget" 下载服务器文件
-    # echo "正在下载服务器版本 $server_version ..."
-    # wget -q "https://example.com/terraria-server-$server_version.tar.gz" -P "/path/to/download/directory"
-
-    # # 假设下载的文件名为 "terraria-server-$server_version.tar.gz"
-    # # 在实际情况中，您可能需要解压缩文件或进行其他设置
-    # # 示例解压缩文件：
-    # tar -xzf "/path/to/download/directory/terraria-server-$server_version.tar.gz" -C "/path/to/terraria-server-directory"
-
-    # echo "服务器版本 $server_version 下载完成！"
+    echo "服务器版本 $server_version 下载完成！"
 }
+
+function start_server() {
+   cd "$(dirname "$0")"
+   chmod +x TerrariaServer/1441/Linux/TerrariaServer.bin.x86_64
+   TerrariaServer/1441/Linux/TerrariaServer.bin.x86_64 -config serverconfig.txt
+}
+
 
 
 # 主循环
-while true; do
+#while true; do
     display_menu
-    echo "请输入选项:"
+    echo -n "请输入选项:"
     read option
     case $option in
-        0)
+        1)
             download_server # 调用下载服务器函数
             ;;
-        1)
-            # 启动服务器的功能， 
-            ;;
         2)
-            # 停止服务器的功能， 
+            start_server # 启动服务器的功能， 
             ;;
         3)
-            # 重启服务器的功能， 
+            # 停止服务器的功能， 
             ;;
         4)
-            # 查看配置信息的功能， 
+            # 重启服务器的功能， 
             ;;
         5)
-            # 更新的功能， 
+            show_config # 查看配置信息的功能， 
             ;;
         6)
+            # 更新的功能， 
+            ;;
+        7)
             # 卸载的功能， 
             ;;
         *)
@@ -136,5 +172,5 @@ while true; do
             ;;
     esac
     echo # 输出一个空行
-done
+#done
 
