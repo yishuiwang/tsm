@@ -32,10 +32,66 @@ function display_menu() {
     echo "2. 启动服务器"
     echo "3. 停止服务器"
     echo "4. 重启服务器"
-    echo "5. 查看配置信息"
-    echo "6. 更新"
+    echo "5. 查看配置"
+    echo "6. 修改配置"
     echo "7. 卸载"
 }
+
+function update_config() {
+    info=(
+        "最大玩家数"
+        "端口号"
+        "服务器密码"
+        "当前存档"
+    )
+    echo "-------------- Update --------------"
+    # 打印选项列表
+    for ((i = 0; i < ${#info[@]}; i++)); do
+        echo "$((i+1)). ${info[$i]}"
+    done
+
+    echo -n "输入选项的编号："
+    read choice
+
+    case $choice in
+        1)
+            echo -n "请输入新的最大玩家数: "
+            read max_players
+            # 检查输入是否为1到255之间的整数
+            if ! [[ "$max_players" =~ ^[1-9][0-9]{0,2}$ || "$max_players" -le 255 ]]; then
+                echo "错误：请输入1到255之间的整数作为最大玩家数。"
+                exit 1
+            fi
+            echo "已将最大玩家数更新为：$max_players"
+            ;;
+        2)
+            echo -n "请输入新的端口号: "
+            read port
+            # 检查输入是否为1到65535之间的整数
+            if ! [[ "$port" =~ ^[1-9][0-9]{0,4}$ || "$port" -le 65535 ]]; then
+                echo "错误：请输入1到65535之间的整数作为端口号。"
+                exit 1
+            fi
+            echo "已将端口号更新为：$port"
+            ;;
+        3)
+            echo -n "请输入新的服务器密码（回车代表没有密码）: "
+            read server_password
+            # 在这里处理更新服务器密码的逻辑，比如写入配置文件
+            echo "已将服务器密码更新为：$server_password"
+            ;;
+        4)
+            echo -n "请输入新的存档: "
+            read world_name
+            # 在这里处理更新世界名字的逻辑，比如写入配置文件
+            echo "已将世界名字更新为：$world_name"
+            ;;
+        *)
+            echo "无效的选项，请重新运行脚本并选择正确的编号。"
+            ;;
+    esac
+}
+
 
 
 function show_config() {
@@ -74,10 +130,7 @@ function show_config() {
     done < "$file"
 }
 
-
-
 function download_server() {
-
     echo "正在获取版本..."
     url="https://terraria.wiki.gg/wiki/Server#Downloads"
 
@@ -132,10 +185,32 @@ function download_server() {
     echo "服务器版本 $server_version 下载完成！"
 }
 
+function delete_server() {
+    echo 1
+}
+
+function get_latest_version() {
+    # 切换到TerrariaServer目录
+    cd TerrariaServer
+
+    # 找到该目录下的所有文件名中的数字，并将其排序（按照文件名升序排序）
+    latest_version=$(ls | grep -Eo '[0-9]+' | sort -n | tail -1)
+
+    # 返回最新版本号
+    echo "$latest_version"
+}
+
 function start_server() {
-   cd "$(dirname "$0")"
-   chmod +x TerrariaServer/1441/Linux/TerrariaServer.bin.x86_64
-   TerrariaServer/1441/Linux/TerrariaServer.bin.x86_64 -config serverconfig.txt
+    latest_version=$(get_latest_version)
+   
+    # 确保服务器二进制文件有执行权限
+    chmod +x "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64"
+
+    # 启动服务器并在后台运行
+    "./TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" -config /root/project/tsm.sh/config.txt &
+    
+    # 输出服务器已经启动
+    echo "TerrariaServer is now running in the background."
 }
 
 
@@ -162,10 +237,10 @@ function start_server() {
             show_config # 查看配置信息的功能， 
             ;;
         6)
-            # 更新的功能， 
+            update_config # 更新的功能， 
             ;;
         7)
-            # 卸载的功能， 
+            delete_server # 卸载的功能， 
             ;;
         *)
             echo "无效的选项，请重新输入！"
