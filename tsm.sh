@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# 初始化
-server_statue="running"
-
-# 函数：显示菜单
 function display_menu() {
     # ANSI颜色码
     RED='\033[0;31m'
@@ -11,7 +7,19 @@ function display_menu() {
     YELLOW='\033[0;33m'
     NC='\033[0m' # 重置颜色
 
-    echo "                                "
+    server_statue="unknown"
+
+    check_server_status
+
+    local status=$?
+
+    if [ $status -eq 0 ]; then
+         server_statue="running"
+    else
+         server_statue="stop"
+    fi
+
+    echo -n
     echo "-------------  Terraria Script v1.0 -------------"
     case "$server_statue" in
         "stop")
@@ -91,7 +99,6 @@ function update_config() {
             ;;
     esac
 }
-
 
 
 function show_config() {
@@ -192,7 +199,7 @@ function uninstall() {
     # # 删除父目录下所有文件和目录
     # rm -r "$parent_directory"/*
 
-    # echo "卸载完成"
+    echo "卸载完成"
 }
 
 function get_latest_version() {
@@ -207,14 +214,103 @@ function get_latest_version() {
 }
 
 function start_server() {
+    check_server_status
+
+    local status=$?
+
+    if [ $status -eq 0 ]; then
+        echo "Terraria Server is already running"
+        return 0
+    fi
+
+    echo "Server is starting..."
+
     latest_version=$(get_latest_version)
-   
+
     # 确保服务器二进制文件有执行权限
     chmod +x "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64"
 
-    # 启动服务器并在后台运行
-    "./TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" -config /root/project/tsm.sh/config.txt 
-    
+    # 使用screen命令启动服务器
+    screen -dmSL terraria_server "./TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" -config config.txt
+
+    sleep 3
+
+    local timeout=100
+    local interval=3
+    local counter=0
+
+    # 每隔interval秒检查进程是否在后台运行
+    while [ $counter -lt $timeout ]; do
+        pgrep -f "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" > /dev/null
+        if [ $? -eq 0 ]; then
+            echo "Terraria server start success"
+            return 0
+        fi
+        sleep $interval
+        counter=$((counter + $interval))
+    done
+
+    echo "Timed out waiting for the Terraria server process to start."
+    return 1
+}
+
+function stop_server() {
+    check_server_status
+
+    local status=$?
+
+    if [ $status -eq 0 ]; then
+        local latest_version=$(get_latest_version)
+        local server_pids=$(pgrep -f "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64")
+
+        if [ -n "$server_pids" ]; then
+            echo "Stopping Terraria server..."
+            for pid in $server_pids; do
+                echo "Stopping PID: $pid..."
+                kill $pid
+                
+                # Sleep for a short duration to allow the process to terminate
+                sleep 2
+                
+                # Check if the process is still running
+                if ! pgrep -f "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" >/dev/null; then
+                    echo "Terraria server with PID $pid has stopped."
+                    # If the process has stopped, you can break out of the inner loop
+                    break
+                else
+                    # If the process is still running, you can continue to the next PID
+                    continue
+                fi
+            done
+        else
+            echo "Terraria server is not running."
+        fi
+    else
+        echo "Terraria server is not running."
+    fi
+}
+
+
+function check_server_status() {
+    local latest_version=$(get_latest_version)
+    # pgrep -f "TerrariaServer/1449/Linux/TerrariaServer.bin.x86_64"
+    local server_pid=$(pgrep -f "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64")
+
+    if [ -n "$server_pid" ]; then
+        # The server process is running, check if it's attached to a screen session.
+        local screen_list=$(screen -ls | grep "terraria_server")
+
+        if [ -n "$screen_list" ]; then
+            # echo "Terraria server is running and attached to a screen session."
+            return 0
+        else
+            # echo "Terraria server is running but not attached to a screen session."
+            return 1
+        fi
+    else
+        # echo "Terraria server is not running."
+        return 1
+    fi
 }
 
 
@@ -232,7 +328,7 @@ function start_server() {
             start_server # 启动服务器的功能， 
             ;;
         3)
-            # 停止服务器的功能， 
+            stop_server # 停止服务器的功能， 
             ;;
         4)
             # 重启服务器的功能， 
