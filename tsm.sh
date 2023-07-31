@@ -179,14 +179,20 @@ function download_server() {
     done
 
     echo "正在解压"
-    unzip "$version_choice" -d TerrariaServer
+    unzip -q "$version_choice" -d TerrariaServer
     echo "解压完成"
 
     echo "服务器版本 $server_version 下载完成！"
 }
 
-function delete_server() {
-    echo 1
+function uninstall() {
+    # 获取当前目录的父目录路径
+    # parent_directory=$(dirname "$(pwd)")
+
+    # # 删除父目录下所有文件和目录
+    # rm -r "$parent_directory"/*
+
+    # echo "卸载完成"
 }
 
 function get_latest_version() {
@@ -207,10 +213,8 @@ function start_server() {
     chmod +x "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64"
 
     # 启动服务器并在后台运行
-    "./TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" -config /root/project/tsm.sh/config.txt &
+    "./TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" -config /root/project/tsm.sh/config.txt 
     
-    # 输出服务器已经启动
-    echo "TerrariaServer is now running in the background."
 }
 
 
@@ -240,7 +244,7 @@ function start_server() {
             update_config # 更新的功能， 
             ;;
         7)
-            delete_server # 卸载的功能， 
+            uninstall # 卸载的功能， 
             ;;
         *)
             echo "无效的选项，请重新输入！"
