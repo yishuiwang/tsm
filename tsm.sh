@@ -138,6 +138,7 @@ function show_config() {
 }
 
 function download_server() {
+
     echo "正在获取版本..."
     url="https://terraria.wiki.gg/wiki/Server#Downloads"
 
@@ -205,11 +206,6 @@ function download_server() {
 }
 
 function uninstall() {
-    # 获取脚本所在的目录
-    script_dir=$(cd "$(dirname "$0")" && pwd)
-
-    # 切换到脚本所在的目录
-    cd "$script_dir"
 
     # 提示用户确认删除
     read -p "确定要删除当前目录及其所有内容吗？(y/n): " confirmation
@@ -226,7 +222,6 @@ function uninstall() {
 
 
 function get_latest_version() {
-
     if [ ! -d "TerrariaServer" ]; then
         echo "TerrariaServer目录不存在"
         return
@@ -346,6 +341,8 @@ function check_server_status() {
 
 # 主循环
 #while true; do
+    script_dir="$(cd "$(dirname "$0")" && pwd)"
+    cd "$script_dir"
     display_menu
     echo -n "请输入选项:"
     read option
