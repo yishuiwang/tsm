@@ -159,50 +159,79 @@ function download_server() {
         fi
     done
 
-     
-    total=${#matched_links[@]}
-    last_10="${matched_links[@]:$((total-10)):10}"
-
-    # 输出最后十个版本供选择
-    PS3="请选择一个版本:"
-    select version_choice in ${last_10[@]}; do
-        if [ -n "$version_choice" ]; then
-            echo "您选择的版本是: $version_choice"
-            index=0
-            for version in "${matched_links[@]}"; do
-                if [ "$version" == "$version_choice" ]; then
-                    download_url="${download_links[$index]}"
-                    echo "下载链接：$download_url"
-                    wget -c "$download_url" -O "${version_choice}"
-                    echo "下载完成"
-                    break
-                fi
-                ((index++))
-            done
-            break
-        else
-            echo "无效的选项，请重新输入!"
-        fi
+    count=1
+    for ((i = length - 9; i < length; i++)); do
+        echo "$count): ${matched_links[i]}"
+        ((count++))
     done
 
+   
+    # 处理用户选择
+    echo "请选择一个版本 (直接回车默认下载最新版本):"
+    read choice
+
+    if [[ -z "$choice" ]]; then
+        choice=9
+        download_link="${download_links[length - 1]}"
+        echo "下载链接：$download_link"
+        wget "$download_link" 
+        echo "下载完成"
+    else
+        # 检查用户选择是否在有效范围内
+        if [[ $choice -ge 1 && $choice -le 9 ]]; then
+            download_link="${download_links[length - 9 + choice - 1]}"
+            echo "下载链接：$download_link"
+            wget "$download_link" 
+            echo "下载完成"
+        else
+            echo "无效的选择，请输入有效的编号。"
+        fi
+        exit 0
+    fi
+
+    
+
     echo "正在解压"
-    unzip -q "$version_choice" -d TerrariaServer
-    echo "解压完成"
+    unzip -q "${matched_links[length - 9 + choice - 1]}" -d TerrariaServer
+
+    # 检查解压是否成功
+    if [ $? -eq 0 ]; then
+        echo "解压完成"
+    else
+        echo "解压过程出现错误，请检查下载的压缩文件是否正确或手动解压。"
+    fi
 
     echo "服务器版本 $server_version 下载完成！"
 }
 
 function uninstall() {
-    # 获取当前目录的父目录路径
-    # parent_directory=$(dirname "$(pwd)")
+    # 获取脚本所在的目录
+    script_dir=$(cd "$(dirname "$0")" && pwd)
 
-    # # 删除父目录下所有文件和目录
-    # rm -r "$parent_directory"/*
+    # 切换到脚本所在的目录
+    cd "$script_dir"
 
-    echo "卸载完成"
+    # 提示用户确认删除
+    read -p "确定要删除当前目录及其所有内容吗？(y/n): " confirmation
+
+    if [ "$confirmation" == "y" ]; then
+        parent_dir=$(dirname "$script_dir")
+        rm -rf "${parent_dir}/tsm.sh"
+
+        echo "删除成功"
+    else
+        echo "取消删除"
+    fi
 }
 
+
 function get_latest_version() {
+
+    if [ ! -d "TerrariaServer" ]; then
+        echo "TerrariaServer目录不存在"
+        return
+    fi
+
     # 切换到TerrariaServer目录
     cd TerrariaServer
 
