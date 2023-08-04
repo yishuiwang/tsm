@@ -1,12 +1,11 @@
 #!/bin/bash
 
-function display_menu() {
-    # ANSI颜色码
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[0;33m'
-    NC='\033[0m' # 重置颜色
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # 重置颜色
 
+function display_menu() {
     server_statue="unknown"
 
     check_server_status
@@ -39,7 +38,7 @@ function display_menu() {
     echo "1. 下载服务器"
     echo "2. 启动服务器"
     echo "3. 停止服务器"
-    echo "4. 重启服务器"
+    echo "4. 进入服务器"
     echo "5. 查看配置"
     echo "6. 修改配置"
     echo "7. 卸载"
@@ -254,8 +253,11 @@ function start_server() {
     # 确保服务器二进制文件有执行权限
     chmod +x "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64"
 
+    current_path=$(pwd)
     # 使用screen命令启动服务器
-    screen -dmSL terraria_server "./TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" -config config.txt
+    rm screenlog.0
+    screen -dmSL terraria_server "./TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" -config "$current_path/config.txt" > "$current_path/server.log" 2>&1
+
 
     sleep 3
 
@@ -293,8 +295,7 @@ function stop_server() {
                 echo "Stopping PID: $pid..."
                 kill $pid
                 
-                # Sleep for a short duration to allow the process to terminate
-                sleep 2
+                sleep 1
                 
                 # Check if the process is still running
                 if ! pgrep -f "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" >/dev/null; then
@@ -337,10 +338,94 @@ function check_server_status() {
     fi
 }
 
+declare -A dependencies=(
+    ["wget"]="apt-get install -y wget"
+    ["unzip"]="apt-get install -y unzip"
+    ["screen"]="apt-get install -y screen"
+)
+
+function check_dependencies() {
+    for tool in "${!dependencies[@]}"; do
+        if ! command -v "$tool" &> /dev/null; then
+            echo -e "${RED}错误${NC}：未安装 $tool"
+            install_dependency "$tool"
+
+            # 等待安装完成
+            wait_for_installation "$tool"
+
+            # 重新检查是否安装成功
+            if ! command -v "$tool" &> /dev/null; then
+                echo -e "${RED}错误${NC}：无法自动安装 $tool，请手动安装后重新运行脚本。"
+                exit 1
+            else
+                echo -e "${GREEN}安装成功${NC} $tool"
+            fi
+        fi
+    done
+}
+
+
+function wait_for_installation() {
+    local tool="$1"
+    local timeout=30  # 设置一个合适的超时时间，单位为秒
+    local start_time=$(date +%s)
+
+    while true; do
+        if command -v "$tool" &> /dev/null; then
+            break
+        fi
+
+        local current_time=$(date +%s)
+        local elapsed_time=$((current_time - start_time))
+
+        if [ "$elapsed_time" -gt "$timeout" ]; then
+            echo -e "${RED}错误${NC}：等待超时，无法自动安装 $tool，请手动安装后重新运行脚本。"
+            exit 1
+        fi
+
+        sleep 3
+    done
+}
+
+
+function install_dependency() {
+    local tool="$1"
+
+    local install_cmd="${dependencies[$tool]}"
+
+    if [ -n "$install_cmd" ]; then
+        echo -e "尝试自动安装 $tool..."
+        nohup $install_cmd > /dev/null 2>&1 &
+    else
+        echo -e "无法自动安装 $tool，请手动安装后重新运行脚本。"
+        exit 1
+    fi 
+
+}
+function enter_server() {
+    check_server_status
+
+    local status=$?
+
+    if [ $status -eq 0 ]; then
+        local latest_version=$(get_latest_version)
+        local server_pids=$(pgrep -f "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64")
+
+        if [ -n "$server_pids" ]; then
+            screen -r terraria_server
+        else
+            echo "Terraria server is not running."
+        fi
+    else
+        echo "Terraria server is not running."
+    fi
+}
 
 
 # 主循环
 #while true; do
+    check_dependencies
+
     script_dir="$(cd "$(dirname "$0")" && pwd)"
     cd "$script_dir"
     display_menu
@@ -357,7 +442,7 @@ function check_server_status() {
             stop_server # 停止服务器的功能， 
             ;;
         4)
-            # 重启服务器的功能， 
+            enter_server # 重启服务器的功能， 
             ;;
         5)
             show_config # 查看配置信息的功能， 
