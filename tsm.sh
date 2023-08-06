@@ -49,7 +49,8 @@ function update_config() {
         "最大玩家数"
         "端口号"
         "服务器密码"
-        "当前存档"
+        "当前世界"
+        "motd"
     )
     echo "-------------- Update --------------"
     # 打印选项列表
@@ -69,6 +70,9 @@ function update_config() {
                 echo "错误：请输入1到255之间的整数作为最大玩家数。"
                 exit 1
             fi
+
+            sed -i "s/maxplayers=.*/maxplayers=$max_players/" config.txt
+
             echo "已将最大玩家数更新为：$max_players"
             ;;
         2)
@@ -79,19 +83,62 @@ function update_config() {
                 echo "错误：请输入1到65535之间的整数作为端口号。"
                 exit 1
             fi
+
+            sed -i "s/port=.*/port=$port/" config.txt
+
             echo "已将端口号更新为：$port"
             ;;
         3)
             echo -n "请输入新的服务器密码（回车代表没有密码）: "
             read server_password
-            # 在这里处理更新服务器密码的逻辑，比如写入配置文件
+
+            sed -i "s/password=.*/password=$server_password/" config.txt
+
             echo "已将服务器密码更新为：$server_password"
             ;;
         4)
-            echo -n "请输入新的存档: "
-            read world_name
-            # 在这里处理更新世界名字的逻辑，比如写入配置文件
-            echo "已将世界名字更新为：$world_name"
+            worlds_dir="$HOME/.local/share/Terraria/Worlds"
+
+            # 检查目录是否存在
+            if [ ! -d "$worlds_dir" ]; then
+                echo "Terraria存档目录不存在: $worlds_dir"
+                exit 1
+            fi
+
+            # 列出目录中的存档文件
+            world_files=("$worlds_dir"/*)
+
+            # 显示存档文件列表供用户选择
+            echo "可用存档列表:"
+            for ((i = 0; i < ${#world_files[@]}; i++)); do
+                file_name=$(basename "${world_files[i]}") 
+                echo "$((i+1)) $file_name"
+            done
+            echo -n "请选择一个存档 (输入编号): "
+            read choice
+
+            # 检查选择是否有效
+            if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -gt "${#world_files[@]}" ] || [ "$choice" -lt 1 ]; then
+                echo "错误：请输入有效的编号。"
+                exit 1
+            fi
+
+            # 获取用户选择的存档文件名
+            world_file_name="${world_files[$((choice-1))]}"
+            echo "已将当前存档更新为：$world_file_name"
+
+            # 更新配置文件中的世界名字
+            sed -i "s,world=.*,world=$world_file_name," config.txt
+
+            ;;
+
+        5)
+            echo -n "请输入新的motd: "
+            read motd
+
+            sed -i "s/motd=.*/motd=$motd/" config.txt
+
+            echo "已将motd更新为：$motd"
             ;;
         *)
             echo "无效的选项，请重新运行脚本并选择正确的编号。"
@@ -255,11 +302,14 @@ function start_server() {
 
     current_path=$(pwd)
     # 使用screen命令启动服务器
-    rm screenlog.0
-    screen -dmSL terraria_server "./TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" -config "$current_path/config.txt" > "$current_path/server.log" 2>&1
+    rm screenlog.0  > /dev/null 2>&1
+    # 没有配置文件
+    #screen -dmSL terraria_server "./TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64"  
+    # 有配置文件
+    screen -dmSL terraria_server "./TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" -config "$current_path/config.txt" 
 
 
-    sleep 3
+    sleep 1
 
     local timeout=100
     local interval=3
@@ -267,11 +317,31 @@ function start_server() {
 
     # 每隔interval秒检查进程是否在后台运行
     while [ $counter -lt $timeout ]; do
+        # 检查Terraria服务器进程是否在后台运行
         pgrep -f "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" > /dev/null
-        if [ $? -eq 0 ]; then
-            echo "Terraria server start success"
+        is_process_running=$?
+
+        # 检查日志文件中是否有 "Server started" 字符串
+        tail -n 10 "screenlog.0" | grep "Server started" > /dev/null
+        is_server_started=$?
+
+        if [ $is_process_running -eq 0 ] && [ $is_server_started -eq 0 ]; then
+            echo "Terraria服务器已成功启动！"
             return 0
         fi
+
+        # 检查日志文件中是否有 "Choose World" 字符串
+        tail -n 10 "screenlog.0" | grep "Choose World" > /dev/null
+        is_world_selection=$?
+
+        if [ $is_process_running -eq 0 ] && [ $is_world_selection -eq 0 ]; then
+            echo "启动失败"
+            screen -r terraria_server
+            # screen -S terraria_server -X quit
+            rm screenlog.0 > /dev/null
+            return 1
+        fi
+
         sleep $interval
         counter=$((counter + $interval))
     done
@@ -290,7 +360,8 @@ function stop_server() {
         local server_pids=$(pgrep -f "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64")
 
         if [ -n "$server_pids" ]; then
-            echo "Stopping Terraria server..."
+            echo "Save and exit the server to stop the server process."
+            screen -r terraria_server -X stuff "exit$(printf \\r)"
             for pid in $server_pids; do
                 echo "Stopping PID: $pid..."
                 kill $pid
@@ -318,25 +389,24 @@ function stop_server() {
 
 function check_server_status() {
     local latest_version=$(get_latest_version)
-    # pgrep -f "TerrariaServer/1449/Linux/TerrariaServer.bin.x86_64"
     local server_pid=$(pgrep -f "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64")
 
     if [ -n "$server_pid" ]; then
-        # The server process is running, check if it's attached to a screen session.
         local screen_list=$(screen -ls | grep "terraria_server")
 
         if [ -n "$screen_list" ]; then
-            # echo "Terraria server is running and attached to a screen session."
+            # Server process is running and attached to a screen session.
             return 0
         else
-            # echo "Terraria server is running but not attached to a screen session."
+            # Server process is running but not attached to a screen session.
             return 1
         fi
     else
-        # echo "Terraria server is not running."
+        # Server process is not running.
         return 1
     fi
 }
+
 
 declare -A dependencies=(
     ["wget"]="apt-get install -y wget"
@@ -402,6 +472,7 @@ function install_dependency() {
     fi 
 
 }
+
 function enter_server() {
     check_server_status
 
@@ -442,7 +513,7 @@ function enter_server() {
             stop_server # 停止服务器的功能， 
             ;;
         4)
-            enter_server # 重启服务器的功能， 
+            enter_server # 进入服务器的功能， 
             ;;
         5)
             show_config # 查看配置信息的功能， 
@@ -457,6 +528,6 @@ function enter_server() {
             echo "无效的选项，请重新输入！"
             ;;
     esac
-    echo # 输出一个空行
+
 #done
 
