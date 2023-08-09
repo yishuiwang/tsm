@@ -44,6 +44,7 @@ function display_menu() {
     echo "7. 卸载"
 }
 
+
 function update_config() {
     info=(
         "最大玩家数"
@@ -107,6 +108,12 @@ function update_config() {
 
             # 列出目录中的存档文件
             world_files=("$worlds_dir"/*)
+
+            # 检查存档文件列表是否为空
+            if [ ${#world_files[@]} -eq 0 ]; then
+                echo "存档目录为空。"
+                exit 1
+            fi
 
             # 显示存档文件列表供用户选择
             echo "可用存档列表:"
@@ -214,8 +221,10 @@ function download_server() {
 
    
     # 处理用户选择
-    echo "请选择一个版本 (直接回车默认下载最新版本):"
+    echo -n "请选择一个版本 (直接回车默认下载最新版本):"
     read choice
+
+    echo -n "正在下载: "
 
     if [[ -z "$choice" ]]; then
         choice=9
@@ -237,9 +246,8 @@ function download_server() {
     fi
 
     
-
     echo "正在解压"
-    unzip -q "${matched_links[length - 9 + choice - 1]}" -d TerrariaServer
+    unzip -qo "${matched_links[length - 9 + choice - 1]}" -d TerrariaServer
 
     # 检查解压是否成功
     if [ $? -eq 0 ]; then
@@ -293,9 +301,19 @@ function start_server() {
         return 0
     fi
 
-    echo "Server is starting..."
+  
 
     latest_version=$(get_latest_version)
+
+    # 检查文件是否存在
+    if [ ! -f "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64" ]; then
+        echo "服务器文件不存在，请检查是否已经下载服务器。"
+        exit 1
+    fi
+
+    echo "Server is starting..."
+    echo "首次启动可能会需要较长时间"
+
 
     # 确保服务器二进制文件有执行权限
     chmod +x "TerrariaServer/$latest_version/Linux/TerrariaServer.bin.x86_64"
@@ -310,8 +328,11 @@ function start_server() {
 
 
     sleep 1
-
-    local timeout=100
+    if [ ! -e ~/.local/share/Terraria/Worlds/* ]; then
+        local timeout=400
+    else
+        local timeout=150
+    fi
     local interval=3
     local counter=0
 
@@ -335,7 +356,7 @@ function start_server() {
         is_world_selection=$?
 
         if [ $is_process_running -eq 0 ] && [ $is_world_selection -eq 0 ]; then
-            echo "启动失败"
+            echo "从配置文件启动失败"
             screen -r terraria_server
             # screen -S terraria_server -X quit
             rm screenlog.0 > /dev/null
@@ -412,6 +433,7 @@ declare -A dependencies=(
     ["wget"]="apt-get install -y wget"
     ["unzip"]="apt-get install -y unzip"
     ["screen"]="apt-get install -y screen"
+    ["curl"]="apt-get install -y curl"
 )
 
 function check_dependencies() {
@@ -528,6 +550,4 @@ function enter_server() {
             echo "无效的选项，请重新输入！"
             ;;
     esac
-
 #done
-
