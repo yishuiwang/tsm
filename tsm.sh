@@ -115,12 +115,25 @@ function update_config() {
                 exit 1
             fi
 
+            world_wld_files=()
+
+            # 从存档文件列表中删除非wld文件
+            for ((i = 0; i < ${#world_files[@]}; i++)); do
+                file_name=$(basename "${world_files[i]}")
+                if [[ $file_name == *.wld ]]; then
+                    world_wld_files+=("${world_files[i]}")
+                fi
+            done
+
             # 显示存档文件列表供用户选择
             echo "可用存档列表:"
-            for ((i = 0; i < ${#world_files[@]}; i++)); do
-                file_name=$(basename "${world_files[i]}") 
-                echo "$((i+1)) $file_name"
+            for ((i = 0; i < ${#world_wld_files[@]}; i++)); do
+                file_name=$(basename "${world_wld_files[i]}")
+                if [[ $file_name == *.wld ]]; then
+                    echo "$((i+1)). $file_name"
+                fi
             done
+
             echo -n "请选择一个存档 (输入编号): "
             read choice
 
@@ -131,7 +144,7 @@ function update_config() {
             fi
 
             # 获取用户选择的存档文件名
-            world_file_name="${world_files[$((choice-1))]}"
+            world_file_name="${world_wld_files[$((choice-1))]}"
             echo "已将当前存档更新为：$world_file_name"
 
             # 更新配置文件中的世界名字
@@ -257,6 +270,8 @@ function download_server() {
     fi
 
     echo "服务器版本 $server_version 下载完成！"
+
+    rm "${matched_links[length - 9 + choice - 1]}"
 }
 
 function uninstall() {
@@ -328,11 +343,16 @@ function start_server() {
 
 
     sleep 1
-    if [ ! -e ~/.local/share/Terraria/Worlds/* ]; then
+   
+    local file_count=$(ls -A ~/.local/share/Terraria/Worlds | wc -l)
+
+    if [ "$file_count" -eq 0 ]; then
         local timeout=400
     else
-        local timeout=150
+         local timeout=150
     fi
+   
+
     local interval=3
     local counter=0
 
